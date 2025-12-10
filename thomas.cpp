@@ -147,6 +147,9 @@ int main (int argc, char* argv[])
     } else {
         for (int i = 0; i < N; i++) x[i] = (double)i;
     }
+    
+    // Cache original RHS for iteration resets (avoid re-reading from disk)
+    std::vector<double> rhs_original = x;
 
     // Start timer for Thomas algorithm
     TimerType t_start = getTimeStamp();
@@ -154,16 +157,8 @@ int main (int argc, char* argv[])
     // Run multiple times for accurate timing on fast solves
     int iterations = (N < 1000) ? 100 : (N < 10000) ? 10 : 1;
     for (int iter = 0; iter < iterations; iter++) {
-        // Reset x for each iteration
-        if (!file_rhs.empty()) {
-            FILE* f = fopen(file_rhs.c_str(), "r");
-            if (f) {
-                for (int i = 0; i < N && fscanf(f, "%lf", &x[i]) == 1; i++);
-                fclose(f);
-            }
-        } else {
-            for (int i = 0; i < N; i++) x[i] = (double)i;
-        }
+        // Reset x from cached RHS (in-memory, no disk I/O)
+        x = rhs_original;
         
         thomas(N, x.data(), a.data(), b.data(), c.data(), scratch.data());
     }
@@ -171,10 +166,18 @@ int main (int argc, char* argv[])
     TimerType t_end = getTimeStamp();
     double elapsed = getElapsedTime(t_start, t_end);
 
-    // Print solution to terminal
+    // Print solution to terminal (abbreviated for large N)
     printf("Solution (N=%d):\n", N);
-    for (int i = 0; i < N; i++) {
-        printf("x[%d] = %.6f\n", i, x[i]);
+    if (N <= 10) {
+        // Print all elements for small N
+        for (int i = 0; i < N; i++) {
+            printf("x[%d] = %.6f\n", i, x[i]);
+        }
+    } else {
+        // Print only first and last elements for large N
+        printf("x[0] = %.6f\n", x[0]);
+        printf("... (skipped %d middle elements) ...\n", N - 2);
+        printf("x[%d] = %.6f\n", N - 1, x[N - 1]);
     }
 
     // Print timing information
